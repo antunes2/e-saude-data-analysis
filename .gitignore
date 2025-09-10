@@ -31,4 +31,4 @@ tmp/
 *.tmp
 
 # data sources
-data/raw/
+data/
