@@ -38,7 +38,7 @@ def clean_data(df):
     # Converte colunas para datetime
     date_cols = ['Data do Atendimento', 'Data de Nascimento']
     for col in date_cols:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
+        df[col] = pd.to_datetime(df[col], format='%d/%m/%Y %H:%M:%S', errors='coerce')
     
     # Converte colunas numéricas (ex: onde vírgula é decimal)
     numeric_cols = ['Qtde Prescrita Farmácia Curitibana', 'Qtde Dispensada Farmácia Curitibana', 'Qtde de Medicamento Não Padronizado']
@@ -48,7 +48,7 @@ def clean_data(df):
     # Preence valores missing em colunas categóricas importantes
     categorical_cols = ['Sexo', 'Solicitação de Exames', 'Encaminhamento para Atendimento Especialista']
     for col in categorical_cols:
-        df[col].fillna('Não Informado', inplace=True)
+        df[col] = df[col].fillna('Não Informado')
     
     return df
 
