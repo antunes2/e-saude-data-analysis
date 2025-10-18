@@ -95,15 +95,22 @@ class HealthETLPipeline:
         # 6. Verificação de qualidade
         self._validate_data_quality()
 
-
-
-
     def  transform(self):
-        """
-        Transforma os dados: limpeza, normalização, criação de colunas derivadas.
-        """
-        print("🔧 Transformando dados...")
+        """Fase 2: Limpeza e transformação dos dados"""
+        print("🛠️  Fase 2 - Transformando dados...")
+        
+        # Ordem CRÍTICA das transformações
+        self._convert_dates()           # 1. Datas primeiro
+        self._convert_numeric()         # 2. Depois números
+        self._handle_missing_values()   # 3. Tratar nulos
+        self._create_derived_columns()  # 4. Novas colunas
+        self._create_natural_key()      # 5. Chave única
+        
+        print("   ✅ Transformação concluída")
+        self._validate_transformation()
+        
 
+    
     def load(self):
         """
         Carrega os dados transformados para o banco de dados.
