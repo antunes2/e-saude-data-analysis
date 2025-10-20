@@ -1,65 +1,28 @@
-# test_connection.py
-import psycopg2
-from psycopg2 import sql
+# test_database_env.py
+from src.config.database import DatabaseConfig
 
-# 1. Conecta ao banco
-try:
-    conn = psycopg2.connect(
-        host="localhost",
-        database="eSaudeCuritiba",  # Nome do seu BD
-        user="postgres",
-        password="2042609hg"       # ⚠️ Coloque sua senha real aqui!
-    )
-    print("✅ Conexão com PostgreSQL bem-sucedida!")
-except Exception as e:
-    print(f"❌ Erro de conexão: {e}")
-    exit()
+def test_conexao_segura():
+    """Testa a conexão com variáveis de ambiente"""
+    print("🔐 Testando conexão segura...")
+    
+    # Primeiro testa se as variáveis estão configuradas
+    if not DatabaseConfig.test_connection():
+        print("💡 Dica: Crie um arquivo .env com:")
+        print("   DB_HOST=localhost")
+        print("   DB_NAME=eSaudeCuritiba") 
+        print("   DB_USER=postgres")
+        print("   DB_PASSWORD=sua_senha")
+        return
+    
+    # Testa a conexão real
+    try:
+        with DatabaseConfig.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT version();")
+            version = cursor.fetchone()
+            print(f"✅ Conexão segura OK! PostgreSQL: {version[0]}")
+    except Exception as e:
+        print(f"❌ Erro na conexão: {e}")
 
-# 2. Cria um cursor para executar comandos
-cursor = conn.cursor()
-
-# 3. Tenta inserir um registro de teste na DIM_UNIDADE
-try:
-    insert_query = """
-    INSERT INTO dim_unidade (codigo_unidade, descricao_unidade, tipo_unidade, area_atuacao)
-    VALUES (%s, %s, %s, %s)
-    RETURNING unidade_id;  -- Retorna o ID gerado
-    """
-    
-    valores = ('TESTE_001', 'Unidade de Teste', 'UPA', 'Área Teste')
-    
-    cursor.execute(insert_query, valores)
-    id_gerado = cursor.fetchone()[0]  # Pega o ID retornado
-    print(f"✅ Insert bem-sucedido! ID gerado: {id_gerado}")
-    
-    # 4. Faz commit para salvar no banco
-    conn.commit()
-    
-except Exception as e:
-    print(f"❌ Erro no INSERT: {e}")
-    conn.rollback()  # Desfaz a transação em caso de erro
-
-# 5. Agora lê para confirmar que está lá
-try:
-    select_query = "SELECT * FROM dim_unidade WHERE codigo_unidade = 'TESTE_001';"
-    cursor.execute(select_query)
-    registro = cursor.fetchone()
-    print(f"✅ Confirmação de leitura: {registro}")
-    
-except Exception as e:
-    print(f"❌ Erro no SELECT: {e}")
-
-# 6. Limpa o teste (opcional)
-try:
-    delete_query = "DELETE FROM dim_unidade WHERE codigo_unidade = 'TESTE_001';"
-    cursor.execute(delete_query)
-    conn.commit()
-    print("✅ Registro de teste removido.")
-    
-except Exception as e:
-    print(f"❌ Erro no DELETE: {e}")
-
-# 7. Fecha a conexão
-cursor.close()
-conn.close()
-print("✅ Conexão fechada. Teste concluído!")
+if __name__ == "__main__":
+    test_conexao_segura()

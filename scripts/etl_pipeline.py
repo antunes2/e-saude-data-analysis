@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from src.config.database import DatabaseConfig
+import duckdb
 import logging
 
 class HealthETLPipeline:
@@ -109,8 +110,124 @@ class HealthETLPipeline:
         print("   ✅ Transformação concluída")
         self._validate_transformation()
         
+    def _convert_dates(self):
+        """Converte colunas de data para datetime"""
+        date_cols = ['Data do Atendimento', 'Data de Nascimento']
+        
+        for col in date_cols:
+            if col in self.df.columns:
+                self.df[col] = pd.to_datetime(
+                    self.df[col], 
+                    format='%d/%m/%Y %H:%M:%S',
+                    errors='coerce'
+                    )
+        
+        print("  🔄 Datas convertidas para datetime")
 
+    def _convert_numeric(self):
+        """Trata valores missing e converte numéricos SIMPLES"""
     
+        # Colunas que queremos como inteiros
+        int_columns = [
+            'Qtde Prescrita Farmácia Curitibana',
+            'Qtde Dispensada Farmácia Curitibana', 
+            'Qtde de Medicamento Não Padronizado',
+            'Cômodos'
+        ]
+        
+        for col in int_columns:
+            if col in self.df.columns:
+                # Converte para numérico, trata erros, depois para inteiro
+                self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
+                self.df[col] = self.df[col].fillna(0).astype(int)
+                print(f"   ✅ {col} convertida para inteiro")
+    
+    def _handle_missing_values(self):
+        """Trata valores missing em colunas categóricas importantes"""
+        
+        print("  🔄 Tratando valores missing...")
+
+        total_nulos_inicial = self.df.isnull().sum().sum()
+
+        # Apenas colunas que NÃO podem ser NULL na tabela fato
+        CRITICAL_COLUMNS = {
+            'Sexo': 'Não Informado',
+            'Solicitação de Exames': 'Não Informado',
+            'Encaminhamento para Atendimento Especialista': 'Não Informado', 
+            'Desencadeou Internamento': 'Não Informado'}
+        
+        for col, fill_value in CRITICAL_COLUMNS.items():
+            if col in self.df_columns:
+                n_nulos = self.df[col].isna().sum()
+                if n_nulos > 0:
+                    self.df[col] = self.df[col].fillna(fill_value)
+                    print(f"      ✅ {col}: {n_nulos} nulos → '{fill_value}'")
+                else:
+                    print(f"      ℹ️  {col}: sem nulos")
+
+        # Validaçao da integridade de dados
+        total_nulos_final = self.df.isna().sum().sum()
+
+        print(f"   🔍 Total de valores missing antes: {total_nulos_inicial}, depois: {total_nulos_final}")
+
+        # Validaçao final
+        self._validate_data_integrity()
+
+    def _create_derived_columns(self):
+        """Cria novas colunas derivadas (feature engineering)"""
+        print("  🔄 Criando colunas derivadas...")
+        
+        # Idade do paciente
+        self.df['idade'] = (self.df['Data do Atendimento'] - self.df['Data de Nascimento']).dt.days // 365
+        
+        # Diferença entre prescrito e dispensado
+        self.df['diff_prescrito_dispensado'] = self.df['Qtde Prescrita Farmácia Curitibana'] - self.df['Qtde Dispensada Farmácia Curitibana']
+        
+        # Flag para atendimento que gerou internação
+        self.df['gerou_internamento'] = self.df['Desencadeou Internamento'].apply(lambda x: 1 if x == 'Sim' else 0)
+        
+        # Flag para morador de Curitiba ou região metropolitana
+        self.df['morador_curitiba_rm'] = self.df['Município'].apply(lambda x: "Curitiba" if x == "Curitiba" else "Região Metropolitana")
+
+        # Perídodo do dia do atendimento
+        self.df['periodo_dia'] = self.df['Data do Atendimento'].dt.hour.apply(
+        lambda x: 'Manhã' if 6 <= x < 12 else 
+                  'Tarde' if 12 <= x < 18 else 
+                  'Noite' if 18 <= x < 24 else 'Madrugada')
+        
+        # Faixa etária
+        self.df['faixa_etaria'] = self.df['idade'].apply(
+        lambda x: 'Criança' if x <= 12 else 
+                  'Adolescente' if x <= 19 else 
+                  'Adulto' if x <= 59 else 'Idoso'
+    )
+
+        print("   ✅ Colunas derivadas criadas")
+
+    def _create_natural_key(self):
+        """Cria a chave natural única para cada atendimento."""
+        print("  🔄 Criando chave natural única...")
+        
+        self.df['chave_natural'] = (
+            self.df['Data do Atendimento'].astype(str) + 
+            '_' + self.df['Código da Unidade'].astype(str) + 
+            '_' + self.df['cod_usuario'].astype(str) + 
+            '_' + self.df['Código do Procedimento'].astype(str)
+        )
+        
+        # Valida se realmente é única
+        total_registros = len(self.df)
+        registros_unicos = self.df['chave_natural'].nunique()
+
+        print(f"      📊 Registros: {total_registros:,}")
+        print(f"      🔑 Chaves únicas: {registros_unicos:,}")
+
+        if total_registros != registros_unicos:
+            raise ValueError(f"Chave natural não é única! Total registros: {total_registros}, únicos: {registros_unicos}")
+        else:
+            print("      ✅ Chave natural é única!")
+
+
     def load(self):
         """
         Carrega os dados transformados para o banco de dados.
@@ -140,6 +257,34 @@ class HealthETLPipeline:
                     else:
                         print(f"      ℹ️  {col} - Sem zeros à esquerda")
 
+    def _validate_data_integrity(self):
+        """Valida que colunas essenciais estão preenchidas"""
+        print("   🔍 Validando integridade dos dados...")
+        
+        ESSENTIAL_COLUMNS = [
+            'Data do Atendimento',
+            'Data de Nascimento',
+            'Sexo', 
+            'Código da Unidade',
+            'Código do Procedimento',
+            'Código do CID',
+            'Código do CBO',
+            'cod_usuario'
+        ]
+        
+        issues = []
+        for col in ESSENTIAL_COLUMNS:
+            if col in self.df.columns:
+                n_nulos = self.df[col].isna().sum()
+                if n_nulos > 0:
+                    issues.append(f"{col}: {n_nulos} nulos")
+                else:
+                    print(f"      ✅ {col}: Completo")
+        
+        if issues:
+            print(f"      ⚠️  Problemas encontrados: {', '.join(issues)}")
+        else:
+            print("      ✅ Todas colunas essenciais estão completas!") 
 
     def _print_statistics(self):
         """Exibe estatísticas do processo"""

@@ -10,6 +10,8 @@ env/
 # Environment variables (CRITICAL to ignore!)
 .env
 .env.local
+.env.prod
+secrets.ini
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/

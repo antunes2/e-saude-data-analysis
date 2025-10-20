@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: e-saude-analysis
+Version: 0.1.0
+Requires-Dist: pandas
+Requires-Dist: psycopg2-binary
+Requires-Dist: python-dotenv
+Requires-Dist: openpyxl
+Dynamic: requires-dist
