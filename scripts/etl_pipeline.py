@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from src.config.database import DatabaseConfig
-import duckdb
+from scripts.loaders.dimension_loader import DimensionLoader
 import logging
+from datetime import date
+
 
 class HealthETLPipeline:
 
@@ -233,6 +235,26 @@ class HealthETLPipeline:
         Carrega os dados transformados para o banco de dados.
         """
         print("💾 Carregando dados no banco...")
+
+        try:
+            with DatabaseConfig.get_connection() as conn:
+                # 1. Carregar dimensoes primeiro
+                dimension_loader = DimensionLoader()
+                dimension_maps = dimension_loader.load_all(self.df, conn)
+
+                # 2. Guardar os mapeamentos para usar na tabela fato
+                self.dimension_maps = dimension_maps
+
+                # 3. Estatísticas
+                self.starts['dimensoes_carregadas'] = len(dimension_maps)
+                for dim_name, mapping in dimension_maps.items():
+                    self.stats[f'registros_{dim_name}_inseridos'] = len(mapping)
+
+                print("   ✅ Dimensões carregadas com sucesso")
+
+        except Exception as e:
+            print(f"❌ Erro ao carregar dados: {e}")
+            raise
 
 
     def _validate_data_quality(self):
