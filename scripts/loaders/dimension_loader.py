@@ -135,8 +135,8 @@ class DimensionLoader:
                             VALUES (%s, %s)
                             ON CONFLICT (codigo_cid) DO NOTHING
                            RETURNING cid_id, codigo_cid;""",
-                           (row['Código CID'], 
-                            row['Descrição CID']))
+                           (row['Código do CID'], 
+                            row['Descrição do CID']))
             
             result = cursor.fetchone()
             if result:
@@ -266,23 +266,9 @@ class DimensionLoader:
                 if cursor.statusmessage.startswith('INSERT'):
                     inseridas += 1
                 else:
-                    atualizadas += 1
+                    existentes += 1
 
         conn.commit()
-        self.logger.info(f"📥 dim_perfil_paciente: {inseridas} novos, {atualizadas} atualizados")
-        print(f"      ✅ Dimensão perfil carregada! {inseridas} novos, {atualizadas} atualizados")
+        self.logger.info(f"📥 dim_perfil_paciente: {inseridas} novos, {existentes} atualizados")
+        print(f"      ✅ Dimensão perfil carregada! {inseridas} novos, {existentes} atualizados")
     
-    def _get_existing_ids(self, conn, table_name: str, code_column: str) -> Dict:
-        """
-        Busca IDs já existentes no banco para evitar duplicatas.
-        
-        Args:
-            conn: Conexão PostgreSQL
-            table_name: Nome da tabela dimensão
-            code_column: Nome da coluna de código natural
-            
-        Returns:
-            Dicionário com mapeamento código -> id existente
-        """
-        # 🚧 IMPLEMENTE AQUI (opcional - para carga incremental)
-        pass

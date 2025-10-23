@@ -100,3 +100,66 @@ CREATE INDEX idx_perfil_cod_usuario ON dim_perfil_paciente(cod_usuario);
 COMMENT ON TABLE dim_perfil_paciente IS 'Armazena informações socioeconômicas dos pacientes. Uma linha por paciente.';
 COMMENT ON TABLE fato_atendimento IS 'Armazena os eventos de atendimento. Uma linha por atendimento.';
 COMMENT ON COLUMN fato_atendimento.chave_natural IS 'Chave natural composta para controle de carga incremental: data_atendimento + cod_unidade + cod_usuario + cod_procedimento';
+
+
+ # ----------------------------------------------------
+
+ -- RECRIAR TODAS AS TABELAS DIMENSÃO COM CONSTRAINTS UNIQUE
+
+-- 1. DIM_UNIDADE
+DROP TABLE IF EXISTS dim_unidade CASCADE;
+CREATE TABLE dim_unidade (
+    unidade_id SERIAL PRIMARY KEY,
+    codigo_unidade VARCHAR(50) NOT NULL UNIQUE,
+    descricao_unidade VARCHAR(255),
+    codigo_tipo_unidade VARCHAR(10),
+    tipo_unidade VARCHAR(100)
+);
+
+-- 2. DIM_PROCEDIMENTO
+DROP TABLE IF EXISTS dim_procedimento CASCADE;
+CREATE TABLE dim_procedimento (
+    procedimento_id SERIAL PRIMARY KEY,
+    codigo_procedimento VARCHAR(50) NOT NULL UNIQUE,
+    descricao_procedimento VARCHAR(255)
+);
+
+-- 3. DIM_CID
+DROP TABLE IF EXISTS dim_cid CASCADE;
+CREATE TABLE dim_cid (
+    cid_id SERIAL PRIMARY KEY,
+    codigo_cid VARCHAR(20) NOT NULL UNIQUE,
+    descricao_cid VARCHAR(255)
+);
+
+-- 4. DIM_CBO
+DROP TABLE IF EXISTS dim_cbo CASCADE;
+CREATE TABLE dim_cbo (
+    cbo_id SERIAL PRIMARY KEY,
+    codigo_cbo VARCHAR(20) NOT NULL UNIQUE,
+    descricao_cbo VARCHAR(255)
+);
+
+-- 5. DIM_PERFIL_PACIENTE (já corrigida anteriormente)
+DROP TABLE IF EXISTS dim_perfil_paciente CASCADE;
+CREATE TABLE dim_perfil_paciente (
+    perfil_id SERIAL PRIMARY KEY,
+    sexo VARCHAR(10),
+    data_nascimento DATE,
+    municipio VARCHAR(255),
+    bairro VARCHAR(255),
+    nacionalidade VARCHAR(255),
+    tratamento_domicilio VARCHAR(255),
+    abastecimento VARCHAR(255),
+    energia_eletrica VARCHAR(255),
+    tipo_habitacao VARCHAR(255),
+    destino_lixo VARCHAR(255),
+    fezes_urina VARCHAR(255),
+    comodos INTEGER,
+    em_caso_doenca VARCHAR(255),
+    grupo_comunitario VARCHAR(255),
+    meio_comunicacao VARCHAR(255),
+    meio_transporte VARCHAR(255),
+    codigo_usuario INTEGER NOT NULL UNIQUE,
+    origem_usuario INTEGER
+);

@@ -76,19 +76,24 @@ class HealthETLPipeline:
             print(f"Lendo arquivo: {csv_file.name}")
 
             # Ler CSV com configurações para dados brasileiros
-        df_temp = pd.read_csv(
-            csv_file,
-            sep=';',               # Separador comum em CSVs BR
-            encoding='latin-1',    # Encoding comum em dados BR  
-            low_memory=False,      # Evita warnings de memória
-            dtype=dtype_spec,      # códigos como string
-            parse_dates=False      # Parse datas manual
-        )
-        
-        data_frames.append(df_temp)
+            df_temp = pd.read_csv(
+                csv_file,
+                sep=';',               # Separador comum em CSVs BR
+                encoding='latin-1',    # Encoding comum em dados BR  
+                low_memory=False,      # Evita warnings de memória
+                dtype=dtype_spec,      # códigos como string
+                parse_dates=False      # Parse datas manual
+            )
+            
+            data_frames.append(df_temp)
 
-        # 4. Concatenar todos os DataFrames
+        # 4. Concatenar todos os DataFrames e renomear Município
         self.df = pd.concat(data_frames, ignore_index=True)
+        if 'Municício' in self.df.columns:
+            self.df.rename(columns={'Municício': 'Município'}, inplace=True)
+    
+        # 🚀 MELHORIA FUTURA: Para projetos maiores, criar função _standardize_column_names()
+        # que gerencia múltiplas inconsistências de nomenclatura automaticamente
 
         # 5. Salvar estatísticas 
         self.stats['arquivos_processados'] = len(csv_files)
