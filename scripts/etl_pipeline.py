@@ -3,6 +3,7 @@ import numpy as np
 from pathlib import Path
 from src.config.database import DatabaseConfig
 from scripts.loaders.dimension_loader import DimensionLoader
+from scripts.loaders.fact_loader import FactLoader
 import logging
 from datetime import date
 
@@ -17,7 +18,7 @@ class HealthETLPipeline:
     """
 
     def __init__(self):
-        self.raw_data_path = Path('data/raw/saude')
+        self.raw_data_path = Path('data/raw/saude/test_samples/')
         self.processed_data_path = Path('data/processed/')
         self.df = None # DataFrame principal onde trabalharemos
         self.stats = {}  # Para guardar estatísticas do processo
@@ -164,7 +165,7 @@ class HealthETLPipeline:
             'Desencadeou Internamento': 'Não Informado'}
         
         for col, fill_value in CRITICAL_COLUMNS.items():
-            if col in self.df_columns:
+            if col in self.df.columns:
                 n_nulos = self.df[col].isna().sum()
                 if n_nulos > 0:
                     self.df[col] = self.df[col].fillna(fill_value)
@@ -250,8 +251,12 @@ class HealthETLPipeline:
                 # 2. Guardar os mapeamentos para usar na tabela fato
                 self.dimension_maps = dimension_maps
 
-                # 3. Estatísticas
-                self.starts['dimensoes_carregadas'] = len(dimension_maps)
+                # 3. Carregar tabela fato (usando os mapeamentos)
+                fact_loader = FactLoader(dimension_maps)
+                fact_loader.load_fato_atendimento(self.df, conn)
+
+                # 4. Estatísticas
+                self.stats['dimensoes_carregadas'] = len(dimension_maps)
                 for dim_name, mapping in dimension_maps.items():
                     self.stats[f'registros_{dim_name}_inseridos'] = len(mapping)
 
