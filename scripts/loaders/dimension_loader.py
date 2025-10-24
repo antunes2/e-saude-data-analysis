@@ -133,21 +133,6 @@ class DimensionLoader:
         colunas_cid = ['Código do CID', 'Descrição do CID']
         dim_cid = df[colunas_cid].drop_duplicates()
 
-        # ✅ DEBUG CRÍTICO: Verificar o que está vindo antes do filtro
-        print("🔍 DEBUG - Antes do filtro notna():")
-        print(f"   Total de registros CID: {len(dim_cid)}")
-        print(f"   Valores nulos em 'Código do CID': {dim_cid['Código do CID'].isna().sum()}")
-        
-        # ✅ VERIFICAR valores "falsy" que não são NaN
-        valores_vazios = (dim_cid['Código do CID'] == '') | (dim_cid['Código do CID'].isna())
-        print(f"   Valores vazios ou nulos: {valores_vazios.sum()}")
-        
-        # ✅ MOSTRAR amostra dos valores problemáticos
-        problematicos = dim_cid[dim_cid['Código do CID'].isna() | (dim_cid['Código do CID'] == '')]
-        if len(problematicos) > 0:
-            print(f"   📋 Amostra de registros problemáticos:")
-            for i, row in problematicos.head(3).iterrows():
-                print(f"      CID: '{row['Código do CID']}', Desc: '{row['Descrição do CID']}'")
         
         # ✅ FILTRO MAIS ROBUSTO
         dim_cid = dim_cid[
@@ -157,6 +142,27 @@ class DimensionLoader:
         ].copy()
 
         print(f"   ✅ Após filtro: {len(dim_cid)} registros válidos")
+
+        # 3. Cria registro "CID Não Informado" para valores nulos
+        cursor.execute("""
+            INSERT INTO dim_cid (codigo_cid, descricao_cid)
+            VALUES ('NI', 'CID Não Informado')
+            ON CONFLICT (codigo_cid) DO NOTHING
+            RETURNING cid_id, codigo_cid;
+        """)
+
+        result = cursor.fetchone()
+
+        if result:
+            cid_id, codigo_cid = result
+            self.dimension_maps['cid'][codigo_cid] = cid_id
+            print(f"      ✅ Registro 'CID Não Informado' criado: ID {cid_id}")
+        else:
+            # Se já existir, busca o ID existente
+            cursor.execute("SELECT cid_id FROM dim_cid WHERE codigo_cid = 'NI'")
+            result = cursor.fetchone()
+            if result:
+                self.dimension_maps['cid']['NI'] = result[0]
 
         # Contador para debug
         inseridas = 0
@@ -185,6 +191,7 @@ class DimensionLoader:
         
         conn.commit()
         self.logger.info(f"📥 dim_cid: {inseridas} novas, {existentes} existentes")
+        self.logger.info("Cuida pra nao cagar nas calsas")
         print(f"      ✅ Dimensão cid carregada com sucesso!")
     
     def load_cbos(self, df: pd.DataFrame, conn) -> None:

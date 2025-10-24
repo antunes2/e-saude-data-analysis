@@ -49,11 +49,16 @@ class FactLoader:
                 print(f"   📈 Processadas {index} linhas...")
             
             try:
+                
+                # Tratar código CID "Não Informado"
+                if pd.isna(row['Código do CID']) or row['Código do CID'] in ['', 'None', None, 'NaN']:
+                    codigo_cid = 'NI'  # Usa o código "Não Informado"
+                else:
+                    codigo_cid = str(row['Código do CID']).strip()
 
                 # ✅ CONVERTER para os mesmos tipos do dimension_maps
                 codigo_unidade = str(row['Código da Unidade']) if pd.notna(row['Código da Unidade']) else None
                 codigo_procedimento = str(row['Código do Procedimento']) if pd.notna(row['Código do Procedimento']) else None
-                codigo_cid = str(row['Código do CID']) if pd.notna(row['Código do CID']) else None
                 codigo_cbo = str(row['Código do CBO']) if pd.notna(row['Código do CBO']) else None
                 codigo_usuario = str(row['cod_usuario']) if pd.notna(row['cod_usuario']) else None  
 
