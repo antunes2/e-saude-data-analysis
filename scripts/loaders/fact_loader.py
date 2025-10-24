@@ -30,14 +30,18 @@ class FactLoader:
         
         print("📊 Carregando tabela fato...")
 
-        # ✅ DEBUG: Contadores por tipo de erro
-        error_types = {
-            'unidade': 0,
-            'procedimento': 0, 
-            'cid': 0,
-            'cbo': 0,
-            'perfil': 0
-        }
+        # ✅ DEBUG CRÍTICO: Verificar tipos de dados na PRIMEIRA linha
+        primeira_linha = df.iloc[0]
+        print("🔍 DEBUG - Tipos de dados na primeira linha:")
+        print(f"   'cod_usuario' type: {type(primeira_linha['cod_usuario'])}, value: {primeira_linha['cod_usuario']}")
+        print(f"   'Código da Unidade' type: {type(primeira_linha['Código da Unidade'])}, value: {primeira_linha['Código da Unidade']}")
+        
+        # ✅ DEBUG: Verificar tipos no dimension_maps
+        print("🔍 DEBUG - Tipos no dimension_maps:")
+        perfil_sample_key = list(self.dimension_maps['perfil'].keys())[0]
+        print(f"   dimension_maps['perfil'] key type: {type(perfil_sample_key)}, value: {perfil_sample_key}")
+        
+        error_types = {'unidade': 0, 'procedimento': 0, 'cid': 0, 'cbo': 0, 'perfil': 0}
 
         for index, row in df.iterrows():
             # Mostrar progresso a cada 10.000 linhas
@@ -45,12 +49,20 @@ class FactLoader:
                 print(f"   📈 Processadas {index} linhas...")
             
             try:
+
+                # ✅ CONVERTER para os mesmos tipos do dimension_maps
+                codigo_unidade = str(row['Código da Unidade'])
+                codigo_procedimento = str(row['Código do Procedimento']) 
+                codigo_cid = str(row['Código do CID'])
+                codigo_cbo = str(row['Código do CBO'])
+                codigo_usuario = int(row['cod_usuario'])  # ← PERFIL é INT no maps!
+
                 # códigos naturais -> IDs de dimensão
-                unidade_id = self.dimension_maps['unidade'].get(row['Código da Unidade'])
-                procedimento_id = self.dimension_maps['procedimento'].get(row['Código do Procedimento'])
-                cid_id = self.dimension_maps['cid'].get(row['Código do CID'])
-                cbo_id = self.dimension_maps['cbo'].get(row['Código do CBO'])
-                perfil_id = self.dimension_maps['perfil'].get(row['cod_usuario'])
+                unidade_id = self.dimension_maps['unidade'].get(codigo_unidade)
+                procedimento_id = self.dimension_maps['procedimento'].get(codigo_procedimento)
+                cid_id = self.dimension_maps['cid'].get(codigo_cid)
+                cbo_id = self.dimension_maps['cbo'].get(codigo_cbo)
+                perfil_id = self.dimension_maps['perfil'].get(codigo_usuario)
 
                 # ✅ VALIDAR e IDENTIFICAR qual FK está faltando
                 missing_fks = []

@@ -89,7 +89,7 @@ class HealthETLPipeline:
             data_frames.append(df_temp)
 
         # 4. Concatenar todos os DataFrames e renomear Município
-        self.df = pd.concat(data_frames, ignore_index=True).head(350000)  # Limite para teste rápido
+        self.df = pd.concat(data_frames, ignore_index=True).head(250000)  # Limite para teste rápido
 
         if 'Municício' in self.df.columns:
             self.df.rename(columns={'Municício': 'Município'}, inplace=True)

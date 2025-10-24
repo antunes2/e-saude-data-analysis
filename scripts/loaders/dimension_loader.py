@@ -216,6 +216,13 @@ class DimensionLoader:
 
         for index, (_, row) in enumerate(dim_perfil.iterrows()):
 
+            # ✅ DEBUG: Verificar tipo do cod_usuario
+            cod_usuario_val = row['cod_usuario']
+            print(f"DEBUG: cod_usuario type: {type(cod_usuario_val)}, value: {cod_usuario_val}") if index < 3 else None
+            
+            # Converter para int explicitamente
+            cod_usuario_int = int(cod_usuario_val)
+
             # ✅ MOSTRAR PROGRESSO (a cada 5.000 linhas ou 10% do total)
             if index % 5000 == 0 and index > 0:
                 percentual = (index / total_linhas) * 100
@@ -275,7 +282,7 @@ class DimensionLoader:
             result = cursor.fetchone()
             if result:
                 perfil_id, codigo_usuario = result
-                self.dimension_maps['perfil'][codigo_usuario] = perfil_id
+                self.dimension_maps['perfil'][int(codigo_usuario)] = perfil_id
                 
                 # Verifica se foi INSERT ou UPDATE
                 if cursor.statusmessage.startswith('INSERT'):
