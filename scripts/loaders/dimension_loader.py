@@ -133,18 +133,47 @@ class DimensionLoader:
         colunas_cid = ['Código do CID', 'Descrição do CID']
         dim_cid = df[colunas_cid].drop_duplicates()
 
+        # ✅ DEBUG CRÍTICO: Verificar o que está vindo antes do filtro
+        print("🔍 DEBUG - Antes do filtro notna():")
+        print(f"   Total de registros CID: {len(dim_cid)}")
+        print(f"   Valores nulos em 'Código do CID': {dim_cid['Código do CID'].isna().sum()}")
+        
+        # ✅ VERIFICAR valores "falsy" que não são NaN
+        valores_vazios = (dim_cid['Código do CID'] == '') | (dim_cid['Código do CID'].isna())
+        print(f"   Valores vazios ou nulos: {valores_vazios.sum()}")
+        
+        # ✅ MOSTRAR amostra dos valores problemáticos
+        problematicos = dim_cid[dim_cid['Código do CID'].isna() | (dim_cid['Código do CID'] == '')]
+        if len(problematicos) > 0:
+            print(f"   📋 Amostra de registros problemáticos:")
+            for i, row in problematicos.head(3).iterrows():
+                print(f"      CID: '{row['Código do CID']}', Desc: '{row['Descrição do CID']}'")
+        
+        # ✅ FILTRO MAIS ROBUSTO
+        dim_cid = dim_cid[
+            dim_cid['Código do CID'].notna() & 
+            (dim_cid['Código do CID'] != '') &
+            (dim_cid['Código do CID'].astype(str).str.strip() != '')
+        ].copy()
+
+        print(f"   ✅ Após filtro: {len(dim_cid)} registros válidos")
+
         # Contador para debug
         inseridas = 0
         existentes = 0
 
         for _, row in dim_cid.iterrows():
+            # Garante que o código do CID é string
+            codigo_cid = str(row['Código do CID'].strip())
+            descricao_cid = row['Descrição do CID']
+
             cursor.execute("""
                            INSERT INTO dim_cid (codigo_cid, descricao_cid)
                             VALUES (%s, %s)
                             ON CONFLICT (codigo_cid) DO NOTHING
                            RETURNING cid_id, codigo_cid;""",
-                           (row['Código do CID'], 
-                            row['Descrição do CID']))
+                           (codigo_cid, 
+                            descricao_cid))
             
             result = cursor.fetchone()
             if result:
@@ -215,18 +244,18 @@ class DimensionLoader:
         total_linhas = len(dim_perfil)
 
         for index, (_, row) in enumerate(dim_perfil.iterrows()):
-
-            # ✅ DEBUG: Verificar tipo do cod_usuario
-            cod_usuario_val = row['cod_usuario']
-            print(f"DEBUG: cod_usuario type: {type(cod_usuario_val)}, value: {cod_usuario_val}") if index < 3 else None
             
-            # Converter para int explicitamente
-            cod_usuario_int = int(cod_usuario_val)
+            # ✅ CONVERSÃO CRÍTICA: Garantir que cod_usuario seja INT
+            try:
+                cod_usuario_int = int(row['cod_usuario'])
+            except (ValueError, TypeError):
+                print(f"❌ Erro ao converter cod_usuario: {row['cod_usuario']}")
+                continue
 
             # ✅ MOSTRAR PROGRESSO (a cada 5.000 linhas ou 10% do total)
             if index % 5000 == 0 and index > 0:
                 percentual = (index / total_linhas) * 100
-                print(f"         📈 Progresso: {index:,}/{total_linhas:,} ({percentual:.1f}%)")
+                print(f"         📈 Progresso carregamento dim_perfil: {index:,}/{total_linhas:,} ({percentual:.1f}%)")
             
             cursor.execute("""
             INSERT INTO dim_perfil_paciente (
@@ -259,7 +288,7 @@ class DimensionLoader:
                 meio_transporte = EXCLUDED.meio_transporte
             RETURNING perfil_id, codigo_usuario
             """, (
-                row['cod_usuario'], 
+                cod_usuario_int, 
                 row['Sexo'], 
                 row['Data de Nascimento'],
                 row['Nacionalidade'],

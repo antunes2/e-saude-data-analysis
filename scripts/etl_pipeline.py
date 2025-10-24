@@ -89,7 +89,7 @@ class HealthETLPipeline:
             data_frames.append(df_temp)
 
         # 4. Concatenar todos os DataFrames e renomear Município
-        self.df = pd.concat(data_frames, ignore_index=True).head(250000)  # Limite para teste rápido
+        self.df = pd.concat(data_frames, ignore_index=True).head(150000)  # Limite para teste rápido
 
         if 'Municício' in self.df.columns:
             self.df.rename(columns={'Municício': 'Município'}, inplace=True)
@@ -112,9 +112,10 @@ class HealthETLPipeline:
         # Ordem CRÍTICA das transformações
         self._convert_dates()           # 1. Datas primeiro
         self._convert_numeric()         # 2. Depois números
-        self._handle_missing_values()   # 3. Tratar nulos
-        self._create_derived_columns()  # 4. Novas colunas
-        self._create_natural_key()      # 5. Chave única
+        self._handle_missing_values()   # 3. Tratar nulos (já existe)
+        self._clean_na_values()         # 4. NOVO: Limpar NaNs de códigos!
+        self._create_derived_columns()  # 5. Novas colunas
+        self._create_natural_key()      # 6. Chave única
         
         print("   ✅ Transformação concluída")
         
@@ -180,6 +181,37 @@ class HealthETLPipeline:
 
         # Validaçao final
         self._validate_data_integrity()
+
+    def _clean_na_values(self):
+        """Limpa valores 'NA' ou similares em colunas de códigos"""
+        print("  🔄 Substituindo valores 'NA' em colunas de códigos por None (NULL no Postgre)...")
+        
+        CODE_COLUMNS = [
+            'Código da Unidade',
+            'Código do Procedimento',
+            'Código do CID',
+            'Código do CBO',
+            'CID do Internamento',
+            'cod_usuario',
+        ]
+        
+        cleaned_count = 0
+        
+        for col in CODE_COLUMNS:
+            if col in self.df.columns:
+                # Contar NaNs antes
+                n_nans_before = self.df[col].isna().sum()
+
+                # Substituir valores comuns de 'NA' por NaN
+                self.df[col] = self.df[col].replace({np.nan: None})
+
+                #Contar após limpeza
+                cleaned_count += n_nans_before
+
+                if n_nans_before > 0:
+                    print(f"      ✅ {col}: {n_nans_before} valores limpos para NULL")
+                
+        print(f"   🔍 Total de valores 'NA' limpos: {cleaned_count}")
 
     def _create_derived_columns(self):
         """Cria novas colunas derivadas (feature engineering)"""

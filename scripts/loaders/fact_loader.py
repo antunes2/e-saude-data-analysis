@@ -45,24 +45,30 @@ class FactLoader:
 
         for index, row in df.iterrows():
             # Mostrar progresso a cada 10.000 linhas
-            if index % 10000 == 0 and index > 0:
+            if index % 15000 == 0 and index > 0:
                 print(f"   📈 Processadas {index} linhas...")
             
             try:
 
                 # ✅ CONVERTER para os mesmos tipos do dimension_maps
-                codigo_unidade = str(row['Código da Unidade'])
-                codigo_procedimento = str(row['Código do Procedimento']) 
-                codigo_cid = str(row['Código do CID'])
-                codigo_cbo = str(row['Código do CBO'])
-                codigo_usuario = int(row['cod_usuario'])  # ← PERFIL é INT no maps!
+                codigo_unidade = str(row['Código da Unidade']) if pd.notna(row['Código da Unidade']) else None
+                codigo_procedimento = str(row['Código do Procedimento']) if pd.notna(row['Código do Procedimento']) else None
+                codigo_cid = str(row['Código do CID']) if pd.notna(row['Código do CID']) else None
+                codigo_cbo = str(row['Código do CBO']) if pd.notna(row['Código do CBO']) else None
+                codigo_usuario = str(row['cod_usuario']) if pd.notna(row['cod_usuario']) else None  
+
+                # Se qualquer FK for none, pular
+                if None in [codigo_unidade, codigo_procedimento, codigo_cid, codigo_cbo, codigo_usuario]:
+                    erros += 1
+                    if erros <= 7:  # Mostrar apenas os primeiros 10 erros
+                        print(f"   ❌  Linha {index}: Código None encontrado - pulando")
 
                 # códigos naturais -> IDs de dimensão
                 unidade_id = self.dimension_maps['unidade'].get(codigo_unidade)
                 procedimento_id = self.dimension_maps['procedimento'].get(codigo_procedimento)
                 cid_id = self.dimension_maps['cid'].get(codigo_cid)
                 cbo_id = self.dimension_maps['cbo'].get(codigo_cbo)
-                perfil_id = self.dimension_maps['perfil'].get(codigo_usuario)
+                perfil_id = self.dimension_maps['perfil'].get(int(codigo_usuario)) # <- converte para int na hora da busca
 
                 # ✅ VALIDAR e IDENTIFICAR qual FK está faltando
                 missing_fks = []
