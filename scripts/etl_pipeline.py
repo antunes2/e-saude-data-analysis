@@ -89,7 +89,8 @@ class HealthETLPipeline:
             data_frames.append(df_temp)
 
         # 4. Concatenar todos os DataFrames e renomear Município
-        self.df = pd.concat(data_frames, ignore_index=True)
+        self.df = pd.concat(data_frames, ignore_index=True).head(350000)  # Limite para teste rápido
+
         if 'Municício' in self.df.columns:
             self.df.rename(columns={'Municício': 'Município'}, inplace=True)
     
@@ -116,7 +117,6 @@ class HealthETLPipeline:
         self._create_natural_key()      # 5. Chave única
         
         print("   ✅ Transformação concluída")
-        self._validate_transformation()
         
     def _convert_dates(self):
         """Converte colunas de data para datetime"""
@@ -223,6 +223,17 @@ class HealthETLPipeline:
             '_' + self.df['Código do Procedimento'].astype(str)
         )
         
+        duplicates = self.df[self.df.duplicated('chave_natural', keep=False)]
+
+        if len(duplicates) > 0:
+            print(f"  ⚠️  Chave natural duplicada encontrada! Total duplicados: {len(duplicates)}")
+            print("📋 Amostra das duplicatas:")
+            print(duplicates[['chave_natural', 'Data do Atendimento', 'Código da Unidade', 'cod_usuario']].head(10))
+
+        # ✅ DECISÃO: Manter a PRIMEIRA ocorrência, descartar duplicatas
+        self.df = self.df.drop_duplicates(subset=['chave_natural'], keep='first')
+        print(f"🔄 Removidas {len(duplicates) - len(duplicates.drop_duplicates('chave_natural'))} duplicatas")
+
         # Valida se realmente é única
         total_registros = len(self.df)
         registros_unicos = self.df['chave_natural'].nunique()
@@ -235,6 +246,23 @@ class HealthETLPipeline:
         else:
             print("      ✅ Chave natural é única!")
 
+    def _verify_data_types_before_load(self):
+        """Verifica se os tipos de dados estão compatíveis"""
+        print("🔍 Verificando tipos de dados antes do load...")
+        
+        # Verificar se códigos ainda são strings (não foram convertidos para numéricos)
+        code_columns = ['Código da Unidade', 'Código do Procedimento', 'Código do CID', 'Código do CBO', 'cod_usuario']
+        
+        for col in code_columns:
+            if col in self.df.columns:
+                dtype = self.df[col].dtype
+                sample = self.df[col].iloc[0] if len(self.df) > 0 else 'N/A'
+                print(f"   {col}: dtype={dtype}, amostra='{sample}'")
+                
+                # Se não for string, converter
+                if dtype != 'object':
+                    print(f"   ⚠️  Convertendo {col} para string...")
+                    self.df[col] = self.df[col].astype(str)
 
     def load(self):
         """
@@ -244,6 +272,10 @@ class HealthETLPipeline:
 
         try:
             with DatabaseConfig.get_connection() as conn:
+
+                # ✅ CHAMAR AQUI - antes de qualquer loader
+                self._verify_data_types_before_load()
+
                 # 1. Carregar dimensoes primeiro
                 dimension_loader = DimensionLoader()
                 dimension_maps = dimension_loader.load_all(self.df, conn)

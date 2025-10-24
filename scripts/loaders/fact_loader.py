@@ -30,7 +30,20 @@ class FactLoader:
         
         print("📊 Carregando tabela fato...")
 
+        # ✅ DEBUG: Contadores por tipo de erro
+        error_types = {
+            'unidade': 0,
+            'procedimento': 0, 
+            'cid': 0,
+            'cbo': 0,
+            'perfil': 0
+        }
+
         for index, row in df.iterrows():
+            # Mostrar progresso a cada 10.000 linhas
+            if index % 10000 == 0 and index > 0:
+                print(f"   📈 Processadas {index} linhas...")
+            
             try:
                 # códigos naturais -> IDs de dimensão
                 unidade_id = self.dimension_maps['unidade'].get(row['Código da Unidade'])
@@ -39,14 +52,33 @@ class FactLoader:
                 cbo_id = self.dimension_maps['cbo'].get(row['Código do CBO'])
                 perfil_id = self.dimension_maps['perfil'].get(row['cod_usuario'])
 
-                # Validar se as FK existem
-                if None in [unidade_id, procedimento_id, cid_id, cbo_id, perfil_id]:
-                    self.logger.warning(f"FK não encontrada para linha {index}, pulando...")
+                # ✅ VALIDAR e IDENTIFICAR qual FK está faltando
+                missing_fks = []
+                if unidade_id is None:
+                    missing_fks.append('unidade')
+                    error_types['unidade'] += 1
+                if procedimento_id is None:
+                    missing_fks.append('procedimento') 
+                    error_types['procedimento'] += 1
+                if cid_id is None:
+                    missing_fks.append('cid')
+                    error_types['cid'] += 1
+                if cbo_id is None:
+                    missing_fks.append('cbo')
+                    error_types['cbo'] += 1  
+                if perfil_id is None:
+                    missing_fks.append('perfil')
+                    error_types['perfil'] += 1
+                
+                if missing_fks:
+                    # Mostrar apenas algumas linhas de erro para debug
+                    if erros < 10:  # Mostra apenas os primeiros 10 erros
+                        print(f"   ❌ Linha {index}: FKs faltando - {missing_fks}")
+                        print(f"      Valores: unidade={row['Código da Unidade']}, procedimento={row['Código do Procedimento']}, cid={row['Código do CID']}, cbo={row['Código do CBO']}, usuario={row['cod_usuario']}")
                     erros += 1
                     continue
 
                 # Inserir na tabela fato (apenas IDs e medidas)
-
                 cursor.execute("""
                     INSERT INTO fato_atendimento (
                         unidade_id, procedimento_id, cid_id, cbo_id, perfil_id,

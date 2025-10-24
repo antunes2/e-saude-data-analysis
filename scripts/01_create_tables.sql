@@ -60,41 +60,46 @@ CREATE TABLE dim_perfil_paciente (
 );
 
 -- 3. TABELA FATO PRINCIPAL
+-- 🗑️ APAGAR a versão antiga
+DROP TABLE IF EXISTS fato_atendimento;
+
+-- ✅ RECRIAR com design Star Schema correto
 CREATE TABLE fato_atendimento (
+    -- CHAVE PRIMÁRIA
     atendimento_id SERIAL PRIMARY KEY,
-    -- Datas do evento e do paciente
-    data_atendimento TIMESTAMP NOT NULL,
-    data_nascimento_paciente DATE NOT NULL,
-    -- Demografia do paciente
-    sexo_paciente VARCHAR(1) NOT NULL,
-    idade_paciente INTEGER,
-    -- CHAVES ESTRANGEIRAS (links para as tabelas dimensão)
+    
+    -- ✅ CHAVES ESTRANGEIRAS (apenas IDs das dimensões)
     unidade_id INTEGER NOT NULL REFERENCES dim_unidade(unidade_id),
     procedimento_id INTEGER NOT NULL REFERENCES dim_procedimento(procedimento_id),
     cid_id INTEGER NOT NULL REFERENCES dim_cid(cid_id),
     cbo_id INTEGER NOT NULL REFERENCES dim_cbo(cbo_id),
     perfil_id INTEGER NOT NULL REFERENCES dim_perfil_paciente(perfil_id),
-    -- Medidas e fatos quantitativos
-    solicitacao_exames VARCHAR(3) NOT NULL,
+    
+    -- ✅ MEDIDAS/FATOS (métricas quantitativas)
     qtde_prescrita INTEGER,
     qtde_dispensada INTEGER,
     qtde_nao_padronizado INTEGER,
-    encaminhamento_especialista VARCHAR(3) NOT NULL,
-    desencadeou_internamento VARCHAR(3) NOT NULL,
-    -- Colunas de desfecho (internamento)
-    data_internamento TIMESTAMP,
-    estabelecimento_solicitante VARCHAR(255),
-    estabelecimento_destino VARCHAR(255),
-    cid_internamento VARCHAR(10),
-    -- Chave natural para controle de carga incremental
-    chave_natural VARCHAR(255) UNIQUE NOT NULL
+    
+    -- ✅ MÉTRICAS CALCULADAS (do seu transform())
+    idade_paciente INTEGER,
+    diff_prescrito_dispensado INTEGER,
+    gerou_internamento INTEGER, -- 0 ou 1
+    
+    -- ✅ ATRIBUTOS DE CONTEXTO (não são medidas, não são dimensões)
+    data_atendimento TIMESTAMP NOT NULL,
+    morador_curitiba_rm VARCHAR(20),
+    periodo_dia VARCHAR(10),
+    faixa_etaria VARCHAR(15),
+    
+    -- ✅ CONTROLE DE CARGA
+    chave_natural VARCHAR(255) UNIQUE NOT NULL,
+    data_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. ÍNDICES PARA MELHOR PERFORMANCE
-CREATE INDEX idx_fato_atendimento_data ON fato_atendimento(data_atendimento);
-CREATE INDEX idx_fato_atendimento_chave_natural ON fato_atendimento(chave_natural);
-CREATE INDEX idx_fato_perfil_id ON fato_atendimento(perfil_id);
-CREATE INDEX idx_perfil_cod_usuario ON dim_perfil_paciente(cod_usuario);
+-- Índices para performance
+CREATE INDEX idx_fato_data_atendimento ON fato_atendimento(data_atendimento);
+CREATE INDEX idx_fato_unidade ON fato_atendimento(unidade_id);
+CREATE INDEX idx_fato_perfil ON fato_atendimento(perfil_id);
 
 -- 5. COMENTÁRIOS PARA DOCUMENTAÇÃO
 COMMENT ON TABLE dim_perfil_paciente IS 'Armazena informações socioeconômicas dos pacientes. Uma linha por paciente.';
@@ -163,3 +168,26 @@ CREATE TABLE dim_perfil_paciente (
     codigo_usuario INTEGER NOT NULL UNIQUE,
     origem_usuario INTEGER
 );
+
+#===========================================================
+
+-- 1. Limpar dados
+TRUNCATE TABLE fato_atendimento CASCADE;
+TRUNCATE TABLE dim_perfil_paciente CASCADE;
+TRUNCATE TABLE dim_cbo CASCADE;
+TRUNCATE TABLE dim_cid CASCADE;
+TRUNCATE TABLE dim_procedimento CASCADE;
+TRUNCATE TABLE dim_unidade CASCADE;
+
+-- 2. Resetar sequences (CRÍTICO!)
+ALTER SEQUENCE dim_perfil_paciente_perfil_id_seq RESTART WITH 1;
+ALTER SEQUENCE dim_unidade_unidade_id_seq RESTART WITH 1;
+ALTER SEQUENCE dim_procedimento_procedimento_id_seq RESTART WITH 1;
+ALTER SEQUENCE dim_cid_cid_id_seq RESTART WITH 1;
+ALTER SEQUENCE dim_cbo_cbo_id_seq RESTART WITH 1;
+ALTER SEQUENCE fato_atendimento_atendimento_id_seq RESTART WITH 1;
+
+-- 3. Verificar sequences (COMANDO CORRETO)
+SELECT sequencename, start_value, last_value
+FROM pg_sequences 
+WHERE sequencename LIKE '%dim_%' OR sequencename LIKE '%fato_%';

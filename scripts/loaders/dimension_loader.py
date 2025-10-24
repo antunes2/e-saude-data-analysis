@@ -40,6 +40,14 @@ class DimensionLoader:
         self.load_cids(df, conn) 
         self.load_cbos(df, conn)
         self.load_perfis(df, conn)
+
+        # ✅ DEBUG: Verificar o que foi realmente carregado
+        print("\n🔍 DEBUG - Dimension Maps carregados:")
+        for dim_name, mapping in self.dimension_maps.items():
+            print(f"   {dim_name}: {len(mapping)} registros")
+            if mapping:  # Se não estiver vazio, mostra alguns exemplos
+                sample_items = list(mapping.items())[:3]  # Primeiros 3 itens
+                print(f"      Amostra: {sample_items}")
         
         print("✅ Todas dimensões carregadas!")
         return self.dimension_maps
@@ -68,8 +76,8 @@ class DimensionLoader:
                             row['Tipo de Unidade']))
         
             # Atualiza o mapeamento
-
             result = cursor.fetchone()
+            
             if result:
                 unidade_id, codigo_unidade = result
                 self.dimension_maps['unidade'][codigo_unidade] = unidade_id
@@ -204,8 +212,15 @@ class DimensionLoader:
         # Contador para debug
         inseridas = 0
         existentes = 0
+        total_linhas = len(dim_perfil)
 
-        for _, row in dim_perfil.iterrows():
+        for index, (_, row) in enumerate(dim_perfil.iterrows()):
+
+            # ✅ MOSTRAR PROGRESSO (a cada 5.000 linhas ou 10% do total)
+            if index % 5000 == 0 and index > 0:
+                percentual = (index / total_linhas) * 100
+                print(f"         📈 Progresso: {index:,}/{total_linhas:,} ({percentual:.1f}%)")
+            
             cursor.execute("""
             INSERT INTO dim_perfil_paciente (
                 codigo_usuario, sexo, data_nascimento, nacionalidade,
