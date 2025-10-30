@@ -191,3 +191,16 @@ ALTER SEQUENCE fato_atendimento_atendimento_id_seq RESTART WITH 1;
 SELECT sequencename, start_value, last_value
 FROM pg_sequences 
 WHERE sequencename LIKE '%dim_%' OR sequencename LIKE '%fato_%';
+
+=====================================
+
+-- Adicionar colunas de coordenadas na dim_unidade
+ALTER TABLE dim_unidade 
+ADD COLUMN IF NOT EXISTS latitude DECIMAL(10, 8),
+ADD COLUMN IF NOT EXISTS longitude DECIMAL(10, 8),
+ADD COLUMN IF NOT EXISTS endereco_completo TEXT,
+ADD COLUMN IF NOT EXISTS data_geocoding TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+-- Criar índice para performance em mapas
+CREATE INDEX IF NOT EXISTS idx_unidade_coordinates 
+ON dim_unidade (latitude, longitude);
