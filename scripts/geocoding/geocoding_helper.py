@@ -118,3 +118,190 @@ class GeoCodingHelper:
                 continue
 
             return None
+
+    def _extract_main_name(self, unit_name):
+        """Extrai o nome principal da unidade, removendo siglas e termos genéricos"""
+        
+        # Remover siglas comuns
+        cleaned = unit_name
+        words_to_remove = ['upa', 'ums', 'us', 'psf', 'ubs', 'ciaf', 'unidade', 'de', 'saúde', 'pronto', 'atendimento', 'básica']
+
+        for word in words_to_remove:
+            cleaned = cleaned.replace(word, '')
+
+        # Pega a primeira palavra significativa restante
+        words = [word.strip().title() for word in cleaned.split() if word.strip() and len(word.strip()) > 2]    
+        
+        if words:
+            return words[0] # Retorna a primeira palavra significativa
+        return ""
+    
+    def get_units_from_db(self):
+        """Busca unidades de saúde do banco de dados"""
+        query = "SELECT cod_unidade, nome_unidade FROM dim_unidade WHERE latitude IS NULL OR longitude IS NULL;"
+        
+        try:
+            conn = DatabaseConfig.get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+            SELECT unidade_id, codigo_unidade, nome_unidade 
+            FROM dim_unidade 
+            WHERE latitude IS NULL OR longitude IS NULL
+            ORDER BY nome_unidade
+        """)
+            
+            units = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            
+            return [{'id': u[0], 'codigo': u[1], 'nome': u[2]} for u in units]
+
+        except Exception as e:
+            self.logger.error(f"Erro ao buscar unidades do DB: {e}")
+            return []              
+        
+    def update_unit_coordinates(self, unit_id, latitude, longitude, endereco):
+        """Atualiza coordenadas da unidade no banco de dados"""
+        try:
+            conn = DatabaseConfig.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE dim_unidade
+                SET latitude = %s, longitude = %s, endereco_completo = %s,
+                data_geocoding = CURRENT_TIMESTAMP
+                WHERE unidade_id = %s;
+            """, (latitude, longitude, endereco, unit_id))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao atualizar unidade {unit_id}: {e}")
+
+    def _safe_reports(self, results, not_found):
+        """Salva relatórios detalhados de sucesso e falha"""
+        try:
+            if results:
+                df_success = pd.DataFrame(results)
+                df_success.to_csv('data/processed/unidades_coordenadas_sucesso.csv', 
+                            index=False, encoding='utf-8')
+                print(f"   💾 Relatório de sucesso salvo: {len(results)} unidades")
+            
+            if not_found:
+                df_fail = pd.DataFrame(not_found)
+                df_fail.to_csv('data/processed/unidades_coordenadas_falha.csv', 
+                            index=False, encoding='utf-8')
+                print(f"   💾 Relatório de falhas salvo: {len(not_found)} unidades")
+
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar relatórios: {e}")
+
+    def _show_summary(self, results, not_found):
+        """Mostra resumo dos resultados de geocoding"""
+        print("\n📊 Resumo da Geocodificação:")
+        print(f"   ✅ Sucesso: {len(results)} unidades")
+        print(f"   ❌ Falha: {len(not_found)} unidades")
+
+        if not_found:
+            print(f"\n📋 PRIMEIRAS 10 UNIDADES NÃO ENCONTRADAS:")
+            for unit in not_found[:10]:
+                print(f"   • {unit['nome']} - {unit.get('erro', 'Erro desconhecido')}")
+            
+            if len(not_found) > 10:
+                print(f"   ... e mais {len(not_found) - 10} unidades")
+            
+                print(f"\n💡 AÇÕES RECOMENDADAS:")
+                print(f"   1. Verifique o arquivo: data/processed/unidades_coordenadas_falha.csv")
+                print(f"   2. Busque coordenadas MANUALMENTE no Google Maps para essas unidades")
+                print(f"   3. Atualize diretamente no banco com:")
+                print(f"      UPDATE dim_unidade SET latitude=XX, longitude=YY WHERE nome_unidade='NOME';")
+        
+        return len(not_found) == 0
+    
+    def process_all_units(self, max_units = None):
+        """Processa todas as unidades do banco que precisam de coordenadas"""
+
+        units = self.get_units_from_db()
+
+        if not units:
+            self.logger.info("✅ Todas as unidades já possuem coordenadas!")
+            return True
+
+        # Limitar para testes rápidos
+        if max_units:
+            units = units[:max_units]
+        
+        self.logger.info(f"📍 Encontradas {len(units)} unidades para processar")
+
+        results = []
+        not_found = []
+
+        for i, unit in enumerate(units, start=1):
+            self.logger.info(f"\n🔹 [{i}/{len(units)}] Processando: {unit['nome']}")
+            
+            # DEBUG: mostrar como o nome será transformado
+            nome_limpo = self.clean_unit_name(unit['nome'])
+            self.logger.info(f"      Nome limpo: {nome_limpo}")
+
+            coordinates = self.smart_geocoding(unit['nome'])
+
+            if coordinates:
+                # Atualizar no banco
+
+                success = self.update_unit_coordinates(
+                    unit['id'],
+                    coordinates['latitude'],
+                    coordinates['longitude'], 
+                    coordinates['endereco_completo']
+                )
+
+                if success:
+                    results.append({
+                        'unidade_id': unit['id'],
+                        'nome_original': unit['nome'],
+                        'nome_busca': nome_limpo,
+                        **coordinates
+                    })
+                    self.logger.info(f"   ✅ Coordenadas salvas!")
+                else:
+                    not_found.append({**unit, 'erro': 'Falha ao salvar no banco'})
+                    self.logger.error(f"   ❌ Erro ao salvar no banco")
+            else:
+                not_found.append({**unit, 'erro': 'Coordenadas não encontradas no OpenStreetMap'})
+                self.logger.error(f"   ❌ Coordenadas não encontradas")
+
+        # 💾 Salvar relatório detalhado
+        self._save_reports(results, not_found)
+        
+        return self._show_summary(results, not_found)  
+    
+    def run_geocoding_pipeline(max_units=None):
+        """
+        Função para executar o pipeline de geocoding
+        """
+        print("🗺️  INICIANDO PROCESSO DE GEOCODING...")
+        print("📍 Estratégia: Nomes COMPLETOS + OpenStreetMap")
+        
+        geocoder = GeoCodingHelper()
+        success = geocoder.process_all_units(max_units)
+        
+        if success:
+            print("✅ Processo de geocoding concluído com sucesso!")
+        else:
+            print("⚠️  Processo concluído com algumas falhas - verifique os relatórios")
+        
+        return success
+
+    # def main_standalone():
+    #     """Função principal para execução STANDALONE apenas"""
+    #     print("🚀 EXECUÇÃO STANDALONE DO GEOCODING")
+    #     run_geocoding_pipeline()
+
+    # if __name__ == "__main__":
+    #     # Quando executado diretamente, roda como standalone
+    #     main_standalone()
