@@ -46,10 +46,10 @@ class FactLoader:
         for index, row in df.iterrows():
             # Mostrar progresso a cada 10.000 linhas
             if index % 15000 == 0 and index > 0:
-                print(f"   📈 Processadas {index} linhas...")
+                print(f"   📈 Processadas {index} linhas fact_loader...")
             
             try:
-                
+
                 # Tratar código CID "Não Informado"
                 if pd.isna(row['Código do CID']) or row['Código do CID'] in ['', 'None', None, 'NaN']:
                     codigo_cid = 'NI'  # Usa o código "Não Informado"

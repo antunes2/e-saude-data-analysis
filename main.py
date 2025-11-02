@@ -4,9 +4,17 @@ from scripts.geocoding.geocoding_helper import run_geocoding_pipeline
 import time
 import logging
 import sys
+import os  # ← IMPORTANTE: Adicione este import
 
 def setup_logging():
     """Configura logging para todo o sistema"""
+    
+    # ✅ CORREÇÃO: Criar pasta logs se não existir
+    log_dir = 'logs'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+        print(f"📁 Pasta de logs criada: {log_dir}")
+    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',

@@ -45,28 +45,30 @@ class ClimateETLPipeline:
         """Extrai dados dos arquivos XLSX"""
         print("📥 Fase 1 - Extraindo dados climáticos...")
         
-        xlsx_files = list(self.raw_data_path.glob('*.xlsx'))
+        csv_files = list(self.raw_data_path.glob('*.csv'))
         
-        if not xlsx_files:
-            raise FileNotFoundError(f"Nenhum XLSX encontrado em {self.raw_data_path}")
+        if not csv_files:
+            raise FileNotFoundError(f"Nenhum CSV encontrado em {self.raw_data_path}")
         
-        print(f"   Encontrados {len(xlsx_files)} arquivos XLSX")
+        print(f"   Encontrados {len(csv_files)} arquivos CSV")
         
         dataframes = []
-        for xlsx_file in xlsx_files:
-            print(f"   Lendo: {xlsx_file.name}")
+        for csv_file in csv_files:
+            print(f"   Lendo: {csv_file.name}")
             
-            df_temp = pd.read_excel(
-                xlsx_file,
-                engine='openpyxl'
-                # Não precisa pular linhas - seu código original não pula
+            df_temp = pd.read_csv(
+                csv_file,
+                skiprows=10,
+                sep=';',
+                encoding='latin-1',
+                low_memory= False
             )
             
             dataframes.append(df_temp)
         
         # Combinar todos os DataFrames
         self.df = pd.concat(dataframes, ignore_index=True)
-        self.stats['arquivos_clima_processados'] = len(xlsx_files)
+        self.stats['arquivos_clima_processados'] = len(csv_files)
         self.stats['registros_clima_extraidos'] = len(self.df)
     
     def transform(self):

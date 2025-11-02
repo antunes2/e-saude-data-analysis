@@ -49,3 +49,5 @@ class DatabaseConfig:
             raise e
         finally:
             conn.close()
+
+    

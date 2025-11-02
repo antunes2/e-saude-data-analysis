@@ -9,7 +9,7 @@ Pipeline ETL profissional para análise integrada de dados de saúde pública de
 🔄 Fluxo de Dados
 Extrai dados CSV brutos → Transforma e enriquece com Python/Pandas → Carrega para PostgreSQL com modelagem dimensional → Analisa via SQL, Jupyter e Power BI para insights estratégicos em saúde pública.
 
-Dados extraidos de https://dadosabertos.curitiba.pr.gov.br/conjuntodado/detalhe?chave=05954644-5595-4dcb-b961-1e31e22a1c6e
+Dados extraidos de https://dadosabertos.curitiba.pr.gov.br/conjuntodado/detalhe?chave=05954644-5595-4dcb-b961-1e31e22a1c6e, https://portal.inmet.gov.br/ e OpenStreetMap
 
 Stack Tecnológica
 
