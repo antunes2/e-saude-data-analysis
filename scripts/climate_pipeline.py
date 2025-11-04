@@ -2,27 +2,29 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from src.config.database import DatabaseConfig
-from datetime import date
 
 class ClimateETLPipeline:
     """
     Pipeline ETL para dados climáticos.
-    Processa arquivos XLSX de temperatura e carrega no PostgreSQL.
+    Processa arquivos CSV de temperatura e carrega no PostgreSQL.
     """
     
-    def __init__(self):
-        self.raw_data_path = Path('data/raw/clima')
-        self.processed_data_path = Path('data/processed')
+    def __init__(self, data_path=None):
+        if data_path:
+            self.raw_data_path = Path(data_path)
+        else:
+            self.project_root = Path(__file__).parent.parent
+            self.raw_data_path = self.project_root / 'data' / 'raw' / 'clima'
+        
         self.df = None
         self.stats = {}
         
-        # Mapeamento de colunas baseado no seu código
         self.column_mapping = {
-            'Data': 'data_hora',
-            'Hora UTC': 'hora_utc', 
-            'TEMPERATURA MÁXIMA NA HORA ANT. (AUT) (°C)': 'temp_max',
-            'TEMPERATURA MÍNIMA NA HORA ANT. (AUT) (°C)': 'temp_min',
-            'TEMPERATURA DO AR - BULBO SECO, HORARIA (°C)': 'temp_atual'
+            'Data Medicao': 'data_medicao',
+            'Hora Medicao': 'hora_medicao',
+            'TEMPERATURA DO AR - BULBO SECO, HORARIA(Â°C)': 'temp_bulbo_seco',
+            'TEMPERATURA MAXIMA NA HORA ANT. (AUT)(Â°C)': 'temp_max',
+            'TEMPERATURA MINIMA NA HORA ANT. (AUT)(Â°C)': 'temp_min'
         }
     
     def run(self):
@@ -42,8 +44,8 @@ class ClimateETLPipeline:
             raise
     
     def extract(self):
-        """Extrai dados dos arquivos XLSX"""
-        print("📥 Fase 1 - Extraindo dados climáticos...")
+        """Extrai dados dos arquivos CSV"""
+        print("📥 Extraindo dados climáticos...")
         
         csv_files = list(self.raw_data_path.glob('*.csv'))
         
@@ -61,76 +63,99 @@ class ClimateETLPipeline:
                 skiprows=10,
                 sep=';',
                 encoding='latin-1',
-                low_memory= False
+                decimal='.',
+                na_values=['null', 'NULL', ''],
+                low_memory=False
             )
             
             dataframes.append(df_temp)
         
-        # Combinar todos os DataFrames
         self.df = pd.concat(dataframes, ignore_index=True)
-        self.stats['arquivos_clima_processados'] = len(csv_files)
-        self.stats['registros_clima_extraidos'] = len(self.df)
+        self.stats['arquivos_processados'] = len(csv_files)
+        self.stats['registros_extraidos'] = len(self.df)
     
     def transform(self):
-        """Transforma dados climáticos - baseado no seu código original"""
-        print("🛠️  Fase 2 - Transformando dados climáticos...")
+        """Transforma dados climáticos"""
+        print("🛠️  Transformando dados climáticos...")
         
         # 1. Renomear colunas
         self.df = self.df.rename(columns=self.column_mapping)
         
-        # 2. Converter data_hora
-        self.df['data_hora'] = pd.to_datetime(self.df['data_hora'], errors='coerce')
+        # 2. Converter temperaturas para numérico
+        for col in ['temp_bulbo_seco', 'temp_max', 'temp_min']:
+            self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
         
-        # 3. Extrair apenas a data
+        # 3. Combinar data e hora
+        self.df['hora_medicao'] = self.df['hora_medicao'].astype(str).str.zfill(4)
+        
+        self.df['data_hora'] = pd.to_datetime(
+            self.df['data_medicao'] + ' ' + 
+            self.df['hora_medicao'].str[:2] + ':' + 
+            self.df['hora_medicao'].str[2:],
+            format='%Y-%m-%d %H:%M',
+            errors='coerce'
+        )
+        
+        # 4. Extrair data
         self.df['data'] = self.df['data_hora'].dt.date
         
-        # 4. Calcular temperatura média (usando sua lógica original)
+        # 5. Calcular temperatura média horária
         def calcular_temp_media(row):
             if pd.notna(row['temp_max']) and pd.notna(row['temp_min']):
                 return (row['temp_max'] + row['temp_min']) / 2
-            elif pd.notna(row['temp_max']):
-                return row['temp_max']
-            elif pd.notna(row['temp_min']):
-                return row['temp_min']
-            elif pd.notna(row['temp_atual']):
-                return row['temp_atual']
+            elif pd.notna(row['temp_bulbo_seco']):
+                return row['temp_bulbo_seco']
             else:
                 return np.nan
         
-        self.df['temperatura_media'] = self.df.apply(calcular_temp_media, axis=1)
+        self.df['temperatura_media_horaria'] = self.df.apply(calcular_temp_media, axis=1)
         
-        # 5. Remover linhas sem temperatura
-        self.df = self.df.dropna(subset=['temperatura_media'])
+        # 6. Remover linhas sem temperatura
+        initial_count = len(self.df)
+        self.df = self.df.dropna(subset=['temperatura_media_horaria'])
+        self.stats['registros_sem_temperatura'] = initial_count - len(self.df)
         
-        # 6. Agrupar por dia para calcular média diária
+        # 7. Agrupar por dia para média diária
         temp_diaria = self.df.groupby('data').agg({
-            'temperatura_media': 'mean'
+            'temperatura_media_horaria': 'mean'
         }).reset_index()
         
-        self.df = temp_diaria  # Agora temos dados diários
-        self.stats['dias_clima_processados'] = len(self.df)
+        temp_diaria = temp_diaria.rename(columns={
+            'temperatura_media_horaria': 'temperatura_media'
+        })
+        
+        self.df = temp_diaria
+        self.stats['dias_processados'] = len(self.df)
     
     def load(self):
         """Carrega dados climáticos no PostgreSQL"""
-        print("📤 Fase 3 - Carregando dados climáticos...")
+        print("📤 Carregando dados climáticos...")
+        
+        if self.df.empty:
+            print("   ⚠️  Nenhum dado para carregar")
+            return
         
         with DatabaseConfig.get_connection() as conn:
             cursor = conn.cursor()
             
             for _, row in self.df.iterrows():
-                # Inserir ou atualizar dados na dim_temperatura
                 query = """
                 INSERT INTO dim_temperatura (data, temperatura_media)
                 VALUES (%s, %s)
                 ON CONFLICT (data) 
-                DO UPDATE SET temperatura_media = EXCLUDED.temperatura_media;
+                DO UPDATE SET 
+                    temperatura_media = EXCLUDED.temperatura_media
                 """
                 
-                cursor.execute(query, (row['data'], float(row['temperatura_media'])))
+                cursor.execute(query, (
+                    row['data'], 
+                    float(row['temperatura_media'])
+                ))
             
-            self.stats['dias_clima_inseridos'] = len(self.df)
+            self.stats['dias_inseridos'] = len(self.df)
     
     def _print_statistics(self):
-        print("\n🌡️  Estatísticas Climáticas:")
+        """Exibe estatísticas básicas"""
+        print("\n📊 Estatísticas do Processamento:")
         for key, value in self.stats.items():
             print(f"   {key}: {value}")

@@ -191,7 +191,6 @@ class DimensionLoader:
         
         conn.commit()
         self.logger.info(f"📥 dim_cid: {inseridas} novas, {existentes} existentes")
-        self.logger.info("Cuida pra nao cagar nas calsas")
         print(f"      ✅ Dimensão cid carregada com sucesso!")
     
     def load_cbos(self, df: pd.DataFrame, conn) -> None:

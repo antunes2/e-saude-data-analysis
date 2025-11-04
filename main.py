@@ -4,7 +4,7 @@ from scripts.geocoding.geocoding_helper import run_geocoding_pipeline
 import time
 import logging
 import sys
-import os  # ← IMPORTANTE: Adicione este import
+import os  
 
 def setup_logging():
     """Configura logging para todo o sistema"""
@@ -19,7 +19,7 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('logs/pipeline_execution.log'),
+            logging.FileHandler('logs/pipeline_execution.log', encoding='utf-8'),
             logging.StreamHandler(sys.stdout)
         ]
     )
@@ -162,7 +162,7 @@ def main():
     
     try:
         # 1. Pipeline Principal - Saúde (SEMPRE executa)
-        execution_results['health'] = run_health_pipeline()
+        #execution_results['health'] = run_health_pipeline()
         
         # 2. Pipeline Climático (OPCIONAL - independente do saúde)
         execution_results['climate'] = run_climate_optional()
